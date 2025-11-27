@@ -1,0 +1,36 @@
+2025-11-27 11:48:48 - root - INFO - Logging configured successfully
+2025-11-27 11:48:48 - __main__ - INFO - Starting ШАД Admission Bot
+2025-11-27 11:48:48 - __main__ - INFO - Configuration loaded and validated
+2025-11-27 11:48:48 - __main__ - INFO - Initializing RAG retriever...
+2025-11-27 11:48:48 - rag.embeddings - INFO - Loading embedding model: all-MiniLM-L6-v2
+2025-11-27 11:48:48 - sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: cpu
+2025-11-27 11:48:48 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-11-27 11:48:52 - huggingface_hub.file_download - WARNING - Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2025-11-27 11:49:05 - rag.embeddings - INFO - Embedding model loaded successfully
+2025-11-27 11:49:05 - rag.retriever - INFO - Loading data from data/data.txt
+2025-11-27 11:49:05 - rag.retriever - INFO - Created 25 chunks from data file
+2025-11-27 11:49:06 - rag.retriever - INFO - FAISS index created with 25 vectors
+2025-11-27 11:49:06 - __main__ - INFO - Initializing OpenRouter client...
+2025-11-27 11:49:06 - llm.openrouter_client - INFO - OpenRouter client initialized with model: x-ai/grok-4.1-fast:free
+2025-11-27 11:49:06 - bot.handlers - INFO - Handlers registered
+2025-11-27 11:49:06 - __main__ - INFO - Bot is starting...
+2025-11-27 11:49:06 - aiogram.dispatcher - INFO - Start polling
+2025-11-27 11:49:07 - aiogram.dispatcher - INFO - Run polling for bot @Sink77777777bot id=6077672334 - 'Sink'
+2025-11-27 11:50:07 - bot.handlers - INFO - User 1063427532 started the bot
+2025-11-27 11:50:07 - aiogram.event - INFO - Update id=914893115 is handled. Duration 547 ms by bot id=6077672334
+2025-11-27 11:50:27 - bot.handlers - INFO - User 1063427532 asked: что такое мидтерм
+2025-11-27 11:50:33 - llm.openrouter_client - INFO - Answer generated successfully
+2025-11-27 11:50:33 - bot.handlers - INFO - Generated answer for user 1063427532
+2025-11-27 11:50:34 - aiogram.event - INFO - Update id=914893116 is handled. Duration 6890 ms by bot id=6077672334
+2025-11-27 11:51:17 - bot.handlers - INFO - User 1063427532 asked: какие есть даты в семестрах
+2025-11-27 11:51:23 - llm.openrouter_client - INFO - Answer generated successfully
+2025-11-27 11:51:23 - bot.handlers - INFO - Generated answer for user 1063427532
+2025-11-27 11:51:24 - aiogram.event - INFO - Update id=914893117 is handled. Duration 6625 ms by bot id=6077672334
+2025-11-27 11:52:11 - bot.handlers - INFO - User 1063427532 asked: кто может учиться в ШАДе
+2025-11-27 11:52:18 - llm.openrouter_client - INFO - Answer generated successfully
+2025-11-27 11:52:18 - bot.handlers - INFO - Generated answer for user 1063427532
+2025-11-27 11:52:18 - aiogram.event - INFO - Update id=914893118 is handled. Duration 7453 ms by bot id=6077672334
+2025-11-27 11:55:15 - aiogram.dispatcher - INFO - Polling stopped
+2025-11-27 11:55:15 - __main__ - INFO - Bot stopped
+2025-11-27 11:55:15 - aiogram.dispatcher - INFO - Polling stopped for bot @Sink77777777bot id=6077672334 - 'Sink'
+2025-11-27 11:55:15 - __main__ - INFO - Bot stopped by user
