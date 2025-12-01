@@ -1,0 +1,12 @@
+{
+  "rag": {
+    "chunk_size": 2000,
+    "top_k": 6,
+    "embedding_model": "cointegrated/rubert-tiny2"
+  },
+  "admin": {
+    "user_ids": [
+      1063427532
+    ]
+  }
+}

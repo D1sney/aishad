@@ -1,9 +1,11 @@
 import logging
+import os
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import Message, FSInputFile
 from rag import RAGRetriever
 from llm import OpenRouterClient
+from bot.config import BotConfig
 
 logger = logging.getLogger(__name__)
 
@@ -13,13 +15,15 @@ router = Router()
 # Global variables (will be set in main.py)
 rag_retriever: RAGRetriever = None
 llm_client: OpenRouterClient = None
+bot_config: BotConfig = None
 
 
-def set_dependencies(retriever: RAGRetriever, client: OpenRouterClient):
-    """Set RAG retriever and LLM client"""
-    global rag_retriever, llm_client
+def set_dependencies(retriever: RAGRetriever, client: OpenRouterClient, config: BotConfig):
+    """Set RAG retriever, LLM client and config"""
+    global rag_retriever, llm_client, bot_config
     rag_retriever = retriever
     llm_client = client
+    bot_config = config
 
 
 @router.message(Command("start"))
@@ -36,6 +40,246 @@ async def cmd_help(message: Message):
     await message.answer("Просто напиши мне свой вопрос о поступлении в ШАД.")
 
 
+@router.message(Command("myid"))
+async def cmd_myid(message: Message):
+    """Show user's Telegram ID"""
+    user_id = message.from_user.id
+    logger.info(f"User {user_id} requested their ID")
+    await message.answer(f"Твой Telegram ID: {user_id}")
+
+
+def is_admin(user_id: int) -> bool:
+    """Check if user is admin"""
+    return user_id in bot_config.admin.user_ids
+
+
+@router.message(Command("config"))
+async def cmd_config(message: Message):
+    """Show current configuration (admin only)"""
+    user_id = message.from_user.id
+
+    if not is_admin(user_id):
+        await message.answer("Эта команда доступна только администраторам.")
+        return
+
+    logger.info(f"Admin {user_id} requested config")
+
+    config_text = f"""📊 Текущая конфигурация RAG:
+
+• chunk_size: {bot_config.rag.chunk_size}
+• top_k: {bot_config.rag.top_k}
+• embedding_model: {bot_config.rag.embedding_model}
+
+Для изменения используй:
+/set_chunk_size <число>
+/set_top_k <число>"""
+
+    await message.answer(config_text)
+
+
+@router.message(Command("set_chunk_size"))
+async def cmd_set_chunk_size(message: Message):
+    """Set chunk_size (admin only)"""
+    user_id = message.from_user.id
+
+    if not is_admin(user_id):
+        await message.answer("Эта команда доступна только администраторам.")
+        return
+
+    try:
+        # Parse value from command
+        parts = message.text.split()
+        if len(parts) != 2:
+            await message.answer("Использование: /set_chunk_size <число>\nПример: /set_chunk_size 500")
+            return
+
+        new_value = int(parts[1])
+
+        if new_value < 100 or new_value > 2000:
+            await message.answer("Значение должно быть от 100 до 2000")
+            return
+
+        # Update config
+        bot_config.rag.chunk_size = new_value
+        bot_config.save_json_config()
+
+        logger.info(f"Admin {user_id} changed chunk_size to {new_value}")
+        await message.answer(f"✅ chunk_size изменен на {new_value}\n\n⚠️ Изменения вступят в силу после перезапуска бота.")
+
+    except ValueError:
+        await message.answer("Ошибка: введи корректное число")
+    except Exception as e:
+        logger.error(f"Error setting chunk_size: {e}")
+        await message.answer("Произошла ошибка при изменении настройки")
+
+
+@router.message(Command("set_top_k"))
+async def cmd_set_top_k(message: Message):
+    """Set top_k (admin only)"""
+    user_id = message.from_user.id
+
+    if not is_admin(user_id):
+        await message.answer("Эта команда доступна только администраторам.")
+        return
+
+    try:
+        # Parse value from command
+        parts = message.text.split()
+        if len(parts) != 2:
+            await message.answer("Использование: /set_top_k <число>\nПример: /set_top_k 5")
+            return
+
+        new_value = int(parts[1])
+
+        if new_value < 1 or new_value > 10:
+            await message.answer("Значение должно быть от 1 до 10")
+            return
+
+        # Update config
+        bot_config.rag.top_k = new_value
+        bot_config.save_json_config()
+
+        logger.info(f"Admin {user_id} changed top_k to {new_value}")
+        await message.answer(f"✅ top_k изменен на {new_value}\n\n✨ Изменение применено немедленно!")
+
+    except ValueError:
+        await message.answer("Ошибка: введи корректное число")
+    except Exception as e:
+        logger.error(f"Error setting top_k: {e}")
+        await message.answer("Произошла ошибка при изменении настройки")
+
+
+@router.message(Command("add_admin"))
+async def cmd_add_admin(message: Message):
+    """Add admin user (admin only)"""
+    user_id = message.from_user.id
+
+    if not is_admin(user_id):
+        await message.answer("Эта команда доступна только администраторам.")
+        return
+
+    try:
+        parts = message.text.split()
+        if len(parts) != 2:
+            await message.answer("Использование: /add_admin <user_id>\nПример: /add_admin 123456789")
+            return
+
+        new_admin_id = int(parts[1])
+
+        if new_admin_id in bot_config.admin.user_ids:
+            await message.answer(f"Пользователь {new_admin_id} уже является администратором")
+            return
+
+        bot_config.admin.user_ids.append(new_admin_id)
+        bot_config.save_json_config()
+
+        logger.info(f"Admin {user_id} added new admin {new_admin_id}")
+        await message.answer(f"✅ Пользователь {new_admin_id} добавлен в администраторы")
+
+    except ValueError:
+        await message.answer("Ошибка: введи корректный user_id")
+    except Exception as e:
+        logger.error(f"Error adding admin: {e}")
+        await message.answer("Произошла ошибка при добавлении администратора")
+
+
+@router.message(Command("get_data"))
+async def cmd_get_data(message: Message):
+    """Send data.txt file (admin only)"""
+    user_id = message.from_user.id
+
+    if not is_admin(user_id):
+        await message.answer("Эта команда доступна только администраторам.")
+        return
+
+    try:
+        data_file_path = bot_config.data_file
+        if not os.path.exists(data_file_path):
+            await message.answer("❌ Файл data.txt не найден")
+            return
+
+        logger.info(f"Admin {user_id} requested data.txt")
+
+        file = FSInputFile(data_file_path)
+        await message.answer_document(
+            document=file,
+            caption="📄 Текущий файл базы знаний\n\nДля обновления: отправь отредактированный файл и используй /reload_data"
+        )
+
+    except Exception as e:
+        logger.error(f"Error sending data file: {e}")
+        await message.answer("Произошла ошибка при отправке файла")
+
+
+@router.message(Command("reload_data"))
+async def cmd_reload_data(message: Message):
+    """Reload RAG with new data (admin only)"""
+    user_id = message.from_user.id
+
+    if not is_admin(user_id):
+        await message.answer("Эта команда доступна только администраторам.")
+        return
+
+    try:
+        logger.info(f"Admin {user_id} requested data reload")
+        await message.answer("⚠️ Для обновления базы знаний нужно перезапустить бота.\n\nОтправь отредактированный файл, я его сохраню, а затем перезапусти бота командой в консоли.")
+
+    except Exception as e:
+        logger.error(f"Error in reload_data: {e}")
+        await message.answer("Произошла ошибка")
+
+
+@router.message(F.document)
+async def handle_document(message: Message):
+    """Handle uploaded documents (admin only)"""
+    user_id = message.from_user.id
+
+    if not is_admin(user_id):
+        return
+
+    try:
+        document = message.document
+
+        # Check file extension
+        if not document.file_name.endswith('.txt'):
+            await message.answer("❌ Поддерживаются только .txt файлы")
+            return
+
+        logger.info(f"Admin {user_id} uploaded file: {document.file_name}")
+
+        # Download file
+        file = await message.bot.get_file(document.file_id)
+        file_path = file.file_path
+
+        # Download to temporary location
+        temp_file = f"temp_{document.file_name}"
+        await message.bot.download_file(file_path, temp_file)
+
+        # Save as data.txt
+        target_path = bot_config.data_file
+
+        # Backup old file
+        if os.path.exists(target_path):
+            backup_path = f"{target_path}.backup"
+            os.replace(target_path, backup_path)
+            logger.info(f"Created backup: {backup_path}")
+
+        # Move new file
+        os.replace(temp_file, target_path)
+
+        logger.info(f"Admin {user_id} updated data.txt")
+        await message.answer(
+            "✅ Файл data.txt обновлен!\n\n"
+            "⚠️ Чтобы изменения вступили в силу, перезапусти бота:\n"
+            "1. Останови бота (Ctrl+C)\n"
+            "2. Запусти снова: python main.py"
+        )
+
+    except Exception as e:
+        logger.error(f"Error handling document: {e}", exc_info=True)
+        await message.answer("❌ Произошла ошибка при обработке файла")
+
+
 @router.message(F.text)
 async def handle_question(message: Message):
     """Handle user questions"""
@@ -45,8 +289,8 @@ async def handle_question(message: Message):
     logger.info(f"User {user_id} asked: {query}")
 
     try:
-        # Retrieve relevant context
-        context = rag_retriever.get_context(query, top_k=3)
+        # Retrieve relevant context using top_k from config
+        context = rag_retriever.get_context(query, top_k=bot_config.rag.top_k)
         logger.debug(f"Retrieved context for user {user_id}")
 
         # Generate answer

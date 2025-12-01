@@ -21,17 +21,22 @@ async def main():
     config = BotConfig.from_env()
     config.validate()
     logger.info("Configuration loaded and validated")
+    logger.info(f"RAG config: chunk_size={config.rag.chunk_size}, top_k={config.rag.top_k}")
 
-    # Initialize RAG retriever
+    # Initialize RAG retriever with config
     logger.info("Initializing RAG retriever...")
-    rag_retriever = RAGRetriever(data_file=config.data_file)
+    rag_retriever = RAGRetriever(
+        data_file=config.data_file,
+        chunk_size=config.rag.chunk_size,
+        embedding_model=config.rag.embedding_model
+    )
 
     # Initialize LLM client
     logger.info("Initializing OpenRouter client...")
     llm_client = OpenRouterClient(api_key=config.openrouter_api_key)
 
     # Set dependencies for handlers
-    set_dependencies(rag_retriever, llm_client)
+    set_dependencies(rag_retriever, llm_client, config)
 
     # Initialize bot and dispatcher
     bot = Bot(token=config.telegram_token)

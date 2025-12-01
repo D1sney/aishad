@@ -10,20 +10,21 @@ logger = logging.getLogger(__name__)
 class RAGRetriever:
     """RAG retriever using FAISS for similarity search"""
 
-    def __init__(self, data_file: str, chunk_size: int = 300):
+    def __init__(self, data_file: str, chunk_size: int = 2200, embedding_model: str = 'all-MiniLM-L6-v2'):
         """
         Initialize RAG retriever
 
         Args:
             data_file: Path to text file with knowledge base
             chunk_size: Maximum characters per chunk
+            embedding_model: Name of the sentence-transformers model
         """
         self.chunk_size = chunk_size
-        self.embedding_model = EmbeddingModel()
+        self.embedding_model = EmbeddingModel(model_name=embedding_model)
         self.chunks = []
         self.index = None
 
-        logger.info(f"Loading data from {data_file}")
+        logger.info(f"Loading data from {data_file} with chunk_size={chunk_size}")
         self._load_and_index(data_file)
 
     def _load_and_index(self, data_file: str):
@@ -64,7 +65,7 @@ class RAGRetriever:
         self.index.add(embeddings_array)
         logger.info(f"FAISS index created with {self.index.ntotal} vectors")
 
-    def retrieve(self, query: str, top_k: int = 3) -> List[Tuple[str, float]]:
+    def retrieve(self, query: str, top_k: int = 5) -> List[Tuple[str, float]]:
         """
         Retrieve most relevant chunks for a query
 
