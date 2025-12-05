@@ -1,10 +1,12 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.config import BotConfig
 from bot.logger_config import setup_logging
 from bot.handlers import register_handlers, set_dependencies
+from bot.feedback import init_db
 from rag import RAGRetriever
 from llm import OpenRouterClient
 
@@ -16,6 +18,10 @@ async def main():
     # Setup logging
     setup_logging(level=logging.INFO)
     logger.info("Starting ШАД Admission Bot")
+
+    # Initialize feedback database
+    init_db()
+    logger.info("Feedback database initialized")
 
     # Load configuration
     config = BotConfig.from_env()
@@ -38,9 +44,10 @@ async def main():
     # Set dependencies for handlers
     set_dependencies(rag_retriever, llm_client, config)
 
-    # Initialize bot and dispatcher
+    # Initialize bot and dispatcher with FSM storage
     bot = Bot(token=config.telegram_token)
-    dp = Dispatcher()
+    storage = MemoryStorage()
+    dp = Dispatcher(storage=storage)
 
     # Register handlers
     register_handlers(dp)

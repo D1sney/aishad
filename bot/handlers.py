@@ -2,10 +2,13 @@ import logging
 import os
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, FSInputFile
+from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from rag import RAGRetriever
 from llm import OpenRouterClient
 from bot.config import BotConfig
+from bot.feedback import save_feedback, get_all_feedback, format_feedback_list
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +19,11 @@ router = Router()
 rag_retriever: RAGRetriever = None
 llm_client: OpenRouterClient = None
 bot_config: BotConfig = None
+
+
+# FSM States for feedback
+class FeedbackStates(StatesGroup):
+    waiting_for_comment = State()
 
 
 def set_dependencies(retriever: RAGRetriever, client: OpenRouterClient, config: BotConfig):
@@ -278,6 +286,121 @@ async def handle_document(message: Message):
     except Exception as e:
         logger.error(f"Error handling document: {e}", exc_info=True)
         await message.answer("❌ Произошла ошибка при обработке файла")
+
+
+@router.message(Command("feedback"))
+async def cmd_feedback(message: Message):
+    """Request user feedback"""
+    user_id = message.from_user.id
+    logger.info(f"User {user_id} requested feedback")
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="👍 Полезно", callback_data="feedback_positive"),
+            InlineKeyboardButton(text="👎 Не помогло", callback_data="feedback_negative")
+        ]
+    ])
+
+    await message.answer(
+        "Как тебе работа бота?\nВыбери оценку:",
+        reply_markup=keyboard
+    )
+
+
+@router.callback_query(F.data.in_(["feedback_positive", "feedback_negative"]))
+async def handle_feedback_rating(callback: CallbackQuery, state: FSMContext):
+    """Handle feedback rating button"""
+    user_id = callback.from_user.id
+    rating = "positive" if callback.data == "feedback_positive" else "negative"
+
+    # Save rating to state
+    await state.update_data(rating=rating)
+    await state.set_state(FeedbackStates.waiting_for_comment)
+
+    rating_emoji = "👍" if rating == "positive" else "👎"
+
+    await callback.message.edit_text(
+        f"{rating_emoji} Спасибо за оценку!\n\n"
+        "Хочешь добавить комментарий? Напиши его следующим сообщением.\n"
+        "Или отправь /skip чтобы пропустить."
+    )
+    await callback.answer()
+
+    logger.info(f"User {user_id} gave {rating} feedback, waiting for comment")
+
+
+@router.message(FeedbackStates.waiting_for_comment, Command("skip"))
+async def skip_feedback_comment(message: Message, state: FSMContext):
+    """Skip feedback comment"""
+    user_id = message.from_user.id
+    data = await state.get_data()
+    rating = data.get('rating')
+
+    # Save feedback without comment
+    save_feedback(
+        user_id=user_id,
+        username=message.from_user.username,
+        first_name=message.from_user.first_name,
+        last_name=message.from_user.last_name,
+        rating=rating,
+        comment=None
+    )
+
+    await state.clear()
+    await message.answer("✅ Спасибо за отзыв!")
+    logger.info(f"User {user_id} skipped feedback comment")
+
+
+@router.message(FeedbackStates.waiting_for_comment)
+async def receive_feedback_comment(message: Message, state: FSMContext):
+    """Receive feedback comment"""
+    user_id = message.from_user.id
+    comment = message.text
+    data = await state.get_data()
+    rating = data.get('rating')
+
+    # Save feedback with comment
+    save_feedback(
+        user_id=user_id,
+        username=message.from_user.username,
+        first_name=message.from_user.first_name,
+        last_name=message.from_user.last_name,
+        rating=rating,
+        comment=comment
+    )
+
+    await state.clear()
+    await message.answer("✅ Спасибо за подробный отзыв! Это поможет улучшить бота.")
+    logger.info(f"User {user_id} submitted feedback with comment")
+
+
+@router.message(Command("feedback_list"))
+async def cmd_feedback_list(message: Message):
+    """Show all feedback (admin only)"""
+    user_id = message.from_user.id
+
+    if not is_admin(user_id):
+        await message.answer("Эта команда доступна только администраторам.")
+        return
+
+    logger.info(f"Admin {user_id} requested feedback list")
+
+    try:
+        feedback_list = get_all_feedback()
+        formatted = format_feedback_list(feedback_list)
+
+        # Split long messages
+        if len(formatted) > 4000:
+            # Send in chunks
+            chunks = [formatted[i:i+4000] for i in range(0, len(formatted), 4000)]
+            for chunk in chunks:
+                await message.answer(chunk)
+        else:
+            await message.answer(formatted)
+
+    except Exception as e:
+        logger.error(f"Error getting feedback list: {e}", exc_info=True)
+        await message.answer("❌ Произошла ошибка при получении отзывов")
 
 
 @router.message(F.text)
