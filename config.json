@@ -1,9 +1,5 @@
 {
-  "rag": {
-    "chunk_size": 2000,
-    "top_k": 6,
-    "embedding_model": "cointegrated/rubert-tiny2"
-  },
+  "data_file": "data/data.txt",
   "admin": {
     "user_ids": [
       1063427532

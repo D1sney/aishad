@@ -14,7 +14,15 @@ ENV/
 # IDE
 .vscode/
 .idea/
+.DS_Store
 
 # RAG cache
 *.index
 *.pkl
+
+# Runtime artifacts
+bot.log
+*.log
+feedback.db
+*.db
+data/data.txt.backup

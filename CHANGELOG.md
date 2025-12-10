@@ -1,6 +1,24 @@
 # Changelog
 
-## Управление data.txt + Русская модель embeddings (Latest)
+## Полный data.txt в системном промпте (Latest)
+
+### Что изменилось:
+- Убран RAG: больше нет embeddings и поиска по FAISS.
+- Весь `data/data.txt` добавляется в системный промпт для ответов.
+- Команды `/set_chunk_size` и `/set_top_k` удалены, `/config` показывает путь к файлу и модель.
+- `config.json` хранит только `data_file` и список администраторов.
+- Удалены лишние зависимости (`sentence-transformers`, `faiss-cpu`, `numpy`).
+
+### Файлы:
+- [llm/openrouter_client.py](llm/openrouter_client.py) — новый системный промпт с полным data.txt
+- [bot/handlers.py](bot/handlers.py) — удалены RAG-команды, обновлен `/config`
+- [bot/config.py](bot/config.py) — упрощенная конфигурация
+- [requirements.txt](requirements.txt) — только необходимые пакеты
+- [README.md](README.md), [DATA_MANAGEMENT.md](DATA_MANAGEMENT.md) — обновленная документация
+
+---
+
+## Управление data.txt + Русская модель embeddings
 
 ### Что добавлено:
 

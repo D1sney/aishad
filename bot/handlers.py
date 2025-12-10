@@ -5,7 +5,6 @@ from aiogram.filters import Command
 from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from rag import RAGRetriever
 from llm import OpenRouterClient
 from bot.config import BotConfig
 from bot.feedback import save_feedback, get_all_feedback, format_feedback_list
@@ -16,7 +15,6 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 # Global variables (will be set in main.py)
-rag_retriever: RAGRetriever = None
 llm_client: OpenRouterClient = None
 bot_config: BotConfig = None
 
@@ -26,10 +24,9 @@ class FeedbackStates(StatesGroup):
     waiting_for_comment = State()
 
 
-def set_dependencies(retriever: RAGRetriever, client: OpenRouterClient, config: BotConfig):
-    """Set RAG retriever, LLM client and config"""
-    global rag_retriever, llm_client, bot_config
-    rag_retriever = retriever
+def set_dependencies(client: OpenRouterClient, config: BotConfig):
+    """Set LLM client and config"""
+    global llm_client, bot_config
     llm_client = client
     bot_config = config
 
@@ -72,89 +69,19 @@ async def cmd_config(message: Message):
 
     logger.info(f"Admin {user_id} requested config")
 
-    config_text = f"""📊 Текущая конфигурация RAG:
+    admins = ", ".join(str(uid) for uid in bot_config.admin.user_ids) or "не заданы"
+    model = getattr(llm_client, "model", "не задана")
 
-• chunk_size: {bot_config.rag.chunk_size}
-• top_k: {bot_config.rag.top_k}
-• embedding_model: {bot_config.rag.embedding_model}
+    config_text = f"""⚙️ Текущие настройки:
 
-Для изменения используй:
-/set_chunk_size <число>
-/set_top_k <число>"""
+• Файл базы знаний: {bot_config.data_file}
+• Модель OpenRouter: {model}
+• Администраторы: {admins}
+
+Бот использует весь файл data.txt как контекст в системном промпте.
+Чтобы обновить знания, загрузите новый файл и перезапустите бота."""
 
     await message.answer(config_text)
-
-
-@router.message(Command("set_chunk_size"))
-async def cmd_set_chunk_size(message: Message):
-    """Set chunk_size (admin only)"""
-    user_id = message.from_user.id
-
-    if not is_admin(user_id):
-        await message.answer("Эта команда доступна только администраторам.")
-        return
-
-    try:
-        # Parse value from command
-        parts = message.text.split()
-        if len(parts) != 2:
-            await message.answer("Использование: /set_chunk_size <число>\nПример: /set_chunk_size 500")
-            return
-
-        new_value = int(parts[1])
-
-        if new_value < 100 or new_value > 2000:
-            await message.answer("Значение должно быть от 100 до 2000")
-            return
-
-        # Update config
-        bot_config.rag.chunk_size = new_value
-        bot_config.save_json_config()
-
-        logger.info(f"Admin {user_id} changed chunk_size to {new_value}")
-        await message.answer(f"✅ chunk_size изменен на {new_value}\n\n⚠️ Изменения вступят в силу после перезапуска бота.")
-
-    except ValueError:
-        await message.answer("Ошибка: введи корректное число")
-    except Exception as e:
-        logger.error(f"Error setting chunk_size: {e}")
-        await message.answer("Произошла ошибка при изменении настройки")
-
-
-@router.message(Command("set_top_k"))
-async def cmd_set_top_k(message: Message):
-    """Set top_k (admin only)"""
-    user_id = message.from_user.id
-
-    if not is_admin(user_id):
-        await message.answer("Эта команда доступна только администраторам.")
-        return
-
-    try:
-        # Parse value from command
-        parts = message.text.split()
-        if len(parts) != 2:
-            await message.answer("Использование: /set_top_k <число>\nПример: /set_top_k 5")
-            return
-
-        new_value = int(parts[1])
-
-        if new_value < 1 or new_value > 10:
-            await message.answer("Значение должно быть от 1 до 10")
-            return
-
-        # Update config
-        bot_config.rag.top_k = new_value
-        bot_config.save_json_config()
-
-        logger.info(f"Admin {user_id} changed top_k to {new_value}")
-        await message.answer(f"✅ top_k изменен на {new_value}\n\n✨ Изменение применено немедленно!")
-
-    except ValueError:
-        await message.answer("Ошибка: введи корректное число")
-    except Exception as e:
-        logger.error(f"Error setting top_k: {e}")
-        await message.answer("Произошла ошибка при изменении настройки")
 
 
 @router.message(Command("add_admin"))
@@ -221,7 +148,7 @@ async def cmd_get_data(message: Message):
 
 @router.message(Command("reload_data"))
 async def cmd_reload_data(message: Message):
-    """Reload RAG with new data (admin only)"""
+    """Reload knowledge base with new data (admin only)"""
     user_id = message.from_user.id
 
     if not is_admin(user_id):
@@ -230,7 +157,10 @@ async def cmd_reload_data(message: Message):
 
     try:
         logger.info(f"Admin {user_id} requested data reload")
-        await message.answer("⚠️ Для обновления базы знаний нужно перезапустить бота.\n\nОтправь отредактированный файл, я его сохраню, а затем перезапусти бота командой в консоли.")
+        await message.answer(
+            "⚠️ Для обновления базы знаний нужно перезапустить бота.\n\n"
+            "Отправь отредактированный data.txt, я его сохраню, а затем перезапусти бота командой в консоли."
+        )
 
     except Exception as e:
         logger.error(f"Error in reload_data: {e}")
@@ -412,12 +342,7 @@ async def handle_question(message: Message):
     logger.info(f"User {user_id} asked: {query}")
 
     try:
-        # Retrieve relevant context using top_k from config
-        context = rag_retriever.get_context(query, top_k=bot_config.rag.top_k)
-        logger.debug(f"Retrieved context for user {user_id}")
-
-        # Generate answer
-        answer = llm_client.generate_answer(query, context)
+        answer = llm_client.generate_answer(query)
         logger.info(f"Generated answer for user {user_id}")
 
         # Send answer

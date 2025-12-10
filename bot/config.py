@@ -1,5 +1,6 @@
-import os
 import json
+import logging
+import os
 from dataclasses import dataclass
 from typing import List
 from dotenv import load_dotenv
@@ -7,14 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 CONFIG_FILE = "config.json"
-
-
-@dataclass
-class RAGConfig:
-    """RAG configuration"""
-    chunk_size: int = 400
-    top_k: int = 5
-    embedding_model: str = "all-MiniLM-L6-v2"
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -33,12 +27,9 @@ class BotConfig:
     telegram_token: str
     openrouter_api_key: str
     data_file: str = "data/data.txt"
-    rag: RAGConfig = None
     admin: AdminConfig = None
 
     def __post_init__(self):
-        if self.rag is None:
-            self.rag = RAGConfig()
         if self.admin is None:
             self.admin = AdminConfig()
 
@@ -61,25 +52,25 @@ class BotConfig:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
-                # Load RAG config
-                if 'rag' in data:
-                    self.rag = RAGConfig(**data['rag'])
-
                 # Load Admin config
                 if 'admin' in data:
                     self.admin = AdminConfig(**data['admin'])
 
+                # Override data file if provided
+                if 'data_file' in data:
+                    self.data_file = data['data_file']
+
+                # Ignore legacy RAG config silently
+                if 'rag' in data:
+                    logger.info("Legacy RAG config found in config.json and ignored.")
+
     def save_json_config(self):
         """Save current configuration to config.json"""
         data = {
-            "rag": {
-                "chunk_size": self.rag.chunk_size,
-                "top_k": self.rag.top_k,
-                "embedding_model": self.rag.embedding_model
-            },
             "admin": {
                 "user_ids": self.admin.user_ids
-            }
+            },
+            "data_file": self.data_file
         }
 
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
